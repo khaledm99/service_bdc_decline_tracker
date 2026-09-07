@@ -228,7 +228,7 @@ def build_example(rng, n_customers, start, end):
     # generate csv rows
     start_str = start.strftime('%d%m%y')
     end_str = end.strftime('%d%m%y')
-    filename = start_str + '-' + end_str + '.csv'
+    filename = "lists/"+start_str + '-' + end_str + '.csv'
 
 
 
