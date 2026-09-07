@@ -40,7 +40,6 @@ LAST_NAMES = [
     "Garcia", "Rodriguez", "Martinez", "Lopez", "Kowalski", "Novak",
 ]
 
-#RO #, RO Closed Date, Advisor ,Tech, Customer Name, Year, Make, Model, Mileage/Kilometers, Op Code, Op Code Name, Task Status, Total 
 
 @dataclass 
 class Customer:
@@ -63,6 +62,21 @@ class Vehicle:
     year: int
     mileage: int
 
+# common opcodes with descriptions and sample prices
+OPCODES = {
+    "BRKSERVICE": ("Brake service due every 32,000km", 185.00),
+    "BRKFLUSH": ("Brake flush due every 45,000km", 194.00),
+    "LOFSYN": ("Synthetic oil change due every 8000km", 190.00),
+    "DRIVELINE": ("Driveline service due every 96,000km", 850.00),
+    "WA": ("Wheel alignment", 140.00),
+    "LEAK": ("Fluid leak identified, needs further diag", 194.95),
+    "CABIN": ("Cabin air filter dirty, needs replacement", 60.00),
+    "AIRFILTER": ("Engine air filter dirty, needs replacement", 94.00),
+    "CFLUSH": ("Coolant flush due every 100,000km", 260.00),
+    "SERTRANS": ("Transmission service due every 45,000km", 250.00),
+    "WS": ("Windshield heavily damaged, recommend replace", 450.00)
+}
+
 @dataclass
 class DeclineLine:
     opcode: str
@@ -79,11 +93,23 @@ class RepairOrder:
     customer: Customer
     declines: List[DeclineLine]
 
+def _gen_declines(
+) -> List[DeclineLine]:
+    n = random.randrange(1,5)
+    declines = []
+    codes = random.sample(list(OPCODES.keys()), n)
+    for c in codes:
+        declines.append(DeclineLine(
+            c,
+            OPCODES[c][0],
+            random.choice(["Caution", "Fail"]),
+            OPCODES[c][1]))
+    return declines
+    
+
 def _gen_customers(
-    rng: int,
     n: int
 ) -> List[Customer]:
-    random.seed(rng)
     customers = []
     used_ids = []
     for c in range(n):
@@ -103,11 +129,9 @@ def _gen_customers(
 
 def _gen_visits(
     n: int,
-    rng: int,
     start: date,
     end: date
 ) -> List[List[datetime]]:
-    random.seed(rng)
     visits = []
     for i in range(n):
         # each customer will visit 1-4 times per year, with 1 visit being the most common
@@ -141,35 +165,43 @@ def _gen_visits(
     return visits
 
 
-# common opcodes with descriptions and sample prices
-OP_CODES = {
-    "BRKSERVICE": ("Brake service due every 32,000km", 185.00),
-    "BRKFLUSH": ("Brake flush due every 45,000km", 194.00),
-    "LOFSYN": ("Synthetic oil change due every 8000km", 190.00),
-    "DRIVELINE": ("Driveline service due every 96,000km", 850.00),
-    "WA": ("Wheel alignment", 140.00),
-    "LEAK": ("Fluid leak identified, needs further diag", 194.95),
-    "CABIN": ("Cabin air filter dirty, needs replacement", 60.00),
-    "AIRFILTER": ("Engine air filter dirty, needs replacement", 94.00),
-    "CFLUSH": ("Coolant flush due every 100,000km", 260.00),
-    "SERTRANS": ("Transmission service due every 45,000km", 250.00),
-    "WS": ("Windshield heavily damaged, recommend replace", 450.00)
-}
-
 def build_example(rng, n_customers, start, end):
     # generate customers
     random.seed(rng)
-    customers = _gen_customers(rng, n_customers)
+    customers = _gen_customers(n_customers)
     # generate visits
-    visits = _gen_visits(rng, len(customers), start, end) 
+    visits = _gen_visits(len(customers), start, end) 
 
-    # generate decline lines per visit
+    # flatten the visits list so we have a list of visits paired with the customer,
+    # and sort by the visit dates. This way, we can realistically generate RO numbers
+    # sequentially based on visits
+    flattened_visits = [(c, dt) for c, visits in zip(customers, visits) for dt in visits]
+    flattened_visits.sort(key=lambda p: p[1])
 
-    for i in range(len(customers)):
-        print(customers[i])
-        for v in visits[i]:
-            # example format: d/m/y h:m am/pm
-            print(v.strftime('%d/%m/%y %I:%M%p'))
+    # generate ROs
+
+    ros = []
+#RO #, RO Closed Date, Advisor ,Tech, Customer Name, Year, Make, Model, Mileage/Kilometers, Op Code, Op Code Name, Task Status, Total 
+    ro_number = random.randrange(100000, 400000)
+    for v in flattened_visits:
+        ros.append(RepairOrder(
+            ro_number,
+            v[1],
+            random.choice(["Advisor A", "Advisor B", "Advisor C"]),
+            random.choice(["Tech A", "Tech B", "Tech C", "Tech D", "Tech E"]),
+            v[0],
+            _gen_declines()
+        ))
+        
+
+        # Not all RO's will have declines. Realistically add gaps in ro number sequence
+        ro_number += random.randrange(1,12)
+
+
+
+
+    for r in ros:
+        print(r)
         print("\n")
 
 
