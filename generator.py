@@ -7,6 +7,7 @@ from datetime import time
 from datetime import date
 import random
 import string
+import csv
 
 FIRST_NAMES = [
     "Robert", "Jennifer", "Michael", "Linda", "David", "Patricia",
@@ -101,9 +102,9 @@ def _gen_declines(
     for c in codes:
         declines.append(DeclineLine(
             c,
-            OPCODES[c][0],
-            random.choice(["Caution", "Fail"]),
-            OPCODES[c][1]))
+            str(OPCODES[c][0]),
+            str(random.choice(["Caution", "Fail"])),
+            str(OPCODES[c][1])))
     return declines
     
 
@@ -163,7 +164,34 @@ def _gen_visits(
             datetimes.append(open_dt + timedelta(minutes = random.randrange(span)))
         visits.append(datetimes)
     return visits
+def _make_ro_rows(ro: RepairOrder) -> List[List[str]]:
+    # Each element is prepended with a space to mimic the real output
+    # of the crm
+    rows = []
+    row = [
+        " "+str(ro.ro),
+        " "+ro.closed_date.strftime('%d/%m/%y %I:%M %p'),
+        " "+ro.advisor,
+        " "+ro.tech,
+        " "+ro.customer.name,
+        " "+str(ro.customer.vehicle.year),
+        " "+ro.customer.vehicle.make,
+        " "+ro.customer.vehicle.model,
+        " "+str(ro.customer.vehicle.mileage),
+        "",
+        "",
+        "",
+        ""
+    ]
+    for d in ro.declines:
+        
+        row[-4] = " "+str(d.opcode)
+        row[-3] = " "+str(d.desc)
+        row[-2] = " "+d.status
+        row[-1] = " "+str(d.total)
+        rows.append(row.copy())
 
+    return rows
 
 def build_example(rng, n_customers, start, end):
     # generate customers
@@ -181,7 +209,6 @@ def build_example(rng, n_customers, start, end):
     # generate ROs
 
     ros = []
-#RO #, RO Closed Date, Advisor ,Tech, Customer Name, Year, Make, Model, Mileage/Kilometers, Op Code, Op Code Name, Task Status, Total 
     ro_number = random.randrange(100000, 400000)
     for v in flattened_visits:
         ros.append(RepairOrder(
@@ -193,16 +220,30 @@ def build_example(rng, n_customers, start, end):
             _gen_declines()
         ))
         
-
         # Not all RO's will have declines. Realistically add gaps in ro number sequence
         ro_number += random.randrange(1,12)
 
 
+#RO #, RO Closed Date, Advisor ,Tech, Customer Name, Year, Make, Model, Mileage/Kilometers, Op Code, Op Code Name, Task Status, Total 
+    # generate csv rows
+    start_str = start.strftime('%d%m%y')
+    end_str = end.strftime('%d%m%y')
+    filename = start_str + '-' + end_str + '.csv'
 
 
-    for r in ros:
-        print(r)
-        print("\n")
+
+    with open(filename, 'w', newline='') as f:
+        w = csv.writer(f)
+        w.writerow(["RO #", "Ro Closed Date", "Advisor ", "Tech", "Customer Name", "Year", "Make", "Model", "Mileage", "Op Code", "Op Code Name", "Task Status", "Total"])
+
+        w = csv.writer(f, quoting=csv.QUOTE_ALL)
+        rows = []
+        for ro in ros:
+            rows += _make_ro_rows(ro)
+        w.writerows(rows)
+    #for r in ros:
+        #print(r)
+        #print("\n")
 
 
 
