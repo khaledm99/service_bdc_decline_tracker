@@ -100,9 +100,18 @@ def group_ros(rows):
         })
     return list(ros.values())
 
+# for each ro, assign a sequence number to each decline line so they can be
+# uniquely keyed in the database
+def assign_seq_numbers(ros):
+    for r in ros:
+        for seq, line in enumerate(r["lines"], start=1):
+            line["seq"] = seq
+
 def main():
     rows = read_rows('lists/010126-311226.csv')
-    print(group_ros(rows))
+    ros = group_ros(rows)
+    assign_seq_numbers(ros)
+    print(ros)
 
 if __name__ == "__main__":
     main()
