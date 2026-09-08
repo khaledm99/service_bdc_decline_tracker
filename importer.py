@@ -182,7 +182,7 @@ def import_to_database(con, ros):
 # the actual decline contact queue
 def next_unenriched(con):
     sql = """
-        SELECT ro_number, ro_date, customer_name
+        SELECT *
         FROM repair_order 
         WHERE customer_no IS NULL
         ORDER BY ro_date, ro_number
@@ -196,12 +196,16 @@ def display_ro(ro, lines):
     print("RO Number:", ro["ro_number"])
     print("RO Date:", ro["ro_date"])
     print("Customer name:", ro["customer_name"])
+    print("Customer no:", ro["customer_no"])
+    print("Advisor:", ro["customer_name"])
+    print("Vehicle:", ro["year"], ro["make"], ro["model"])
+    print("Odometer:", ro["odometer"])
     for l in lines:
-        print("Line:", l["opcode"],"---",l["description"])
+        display_line(l)
 
 def fetch_lines(con, ro):
     sql = """
-    SELECT d.opcode, d.description
+    SELECT *
     FROM decline_line d
     WHERE d.ro_number = (?)
     """
@@ -209,9 +213,8 @@ def fetch_lines(con, ro):
   
     return res.fetchall()
 
-def display_line(line):
-    print("Opcode:", line["opcode"])
-    print("Desc:", line["description"])
+def display_line(l):
+    print("Line",str(l["line_seq"])+":", l["opcode"],"---",l["description"])
 
 def serve_unenriched_ros(con):
     while True:
