@@ -16,6 +16,7 @@
 
 import csv
 import sqlite3
+from datetime import datetime as dt
 
 COLUMN_ALIASES = {
         "ro #": "ro_number",
@@ -58,12 +59,11 @@ def read_rows(path):
                 "desc",
                 "status"
             }
-            # make sure required columns are present
-            # if any are missing, output which ones to inspect crm output
-        for h in mapping:
-            MISSING = REQUIRED - set(mapping.values())
-            if MISSING:
-                raise ValueError(f"Missing required columns: {sorted(MISSING)}")
+        # make sure required columns are present
+        # if any are missing, output which ones to inspect crm output
+        MISSING = REQUIRED - set(mapping.values())
+        if MISSING:
+            raise ValueError(f"Missing required columns: {sorted(MISSING)}")
 
         rows = []
         for row in reader:
@@ -79,11 +79,11 @@ def group_ros(rows):
     # group rows by repair order
     ros = {}
     for r in rows:
-        if r["ro_number"] not in ros:
-            ros[r["ro_number"]] = {
+        if r["ro_number"].strip() not in ros:
+            ros[r["ro_number"].strip()] = {
                 "ro_number": r["ro_number"].strip(),
                 "customer_name": r["customer_name"].strip(),
-                "ro_date": r["ro_closed_date"].strip(),
+                "ro_date": dt.strptime(r["ro_closed_date"].strip(), '%d/%m/%y %I:%M %p').date().isoformat(),
                 "advisor": r["advisor"].strip(),
                 "year": r["year"].strip(),
                 "make": r["make"].strip(),
@@ -91,7 +91,7 @@ def group_ros(rows):
                 "odometer": r["odometer"].strip(),
                 "lines": []
             }
-        ros[r["ro_number"]]["lines"].append({
+        ros[r["ro_number"].strip()]["lines"].append({
             "opcode": r["opcode"].strip(),
             "desc": r["desc"].strip(),
             "status": r["status"].strip(),
@@ -110,6 +110,8 @@ def import_to_database(con, ros):
     cur.execute("""CREATE TABLE IF NOT EXISTS repair_order(
         ro_number       TEXT PRIMARY KEY,
         customer_name   TEXT NOT NULL,
+        customer_no     TEXT,
+        customer_phone  TEXT,
         ro_date         TEXT NOT NULL,
         advisor         TEXT NOT NULL,
         year            INTEGER NOT NULL,
@@ -118,11 +120,11 @@ def import_to_database(con, ros):
         odometer        INTEGER NOT NULL)""")
 
     cur.execute("""CREATE TABLE IF NOT EXISTS decline_line(
-        id              TEXT PRIMARY KEY,
+        id              INTEGER PRIMARY KEY,
         ro_number       TEXT NOT NULL REFERENCES repair_order(ro_number),
         line_seq        INTEGER NOT NULL,
         opcode          TEXT NOT NULL,
-        desc            TEXT,
+        description     TEXT,
         status          TEXT,
         UNIQUE (ro_number, line_seq))""")
 
@@ -132,6 +134,7 @@ def import_to_database(con, ros):
         for ro in ros:
             #insert ro
             cur.execute("""INSERT INTO repair_order
+              (ro_number, customer_name, ro_date, advisor, year, make, model, odometer)
               VALUES (?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING
             """, 
             (
@@ -146,7 +149,7 @@ def import_to_database(con, ros):
             ))
             for line in ro["lines"]:
                 cur.execute("""INSERT INTO decline_line (
-                ro_number, line_seq, opcode, desc, status) 
+                ro_number, line_seq, opcode, description, status) 
                 VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING""",
                 (ro["ro_number"],
                  line["seq"],
@@ -158,7 +161,7 @@ def import_to_database(con, ros):
                 else:
                     skipped += 1
     
-    for row in cur.execute("SELECT ro_number, customer_name FROM repair_order"):
+    for row in cur.execute("SELECT ro_number, ro_date FROM repair_order"):
         print(row)
 
 
