@@ -105,18 +105,19 @@ def assign_seq_numbers(ros):
         for seq, line in enumerate(r["lines"], start=1):
             line["seq"] = seq
 
-def import_to_database(con, ros):
+def init_db(con):
     cur = con.cursor()
     cur.execute("""CREATE TABLE IF NOT EXISTS repair_order(
         ro_number       TEXT PRIMARY KEY,
         customer_name   TEXT NOT NULL,
-        customer_no     TEXT,
+        customer_no     TEXT REFERENCES customer(id),
         customer_phone  TEXT,
         ro_date         TEXT NOT NULL,
         advisor         TEXT NOT NULL,
         year            INTEGER NOT NULL,
         make            TEXT NOT NULL,
         model           TEXT NOT NULL,
+        vin             TEXT
         odometer        INTEGER NOT NULL)""")
 
     cur.execute("""CREATE TABLE IF NOT EXISTS decline_line(
@@ -127,6 +128,16 @@ def import_to_database(con, ros):
         description     TEXT,
         status          TEXT,
         UNIQUE (ro_number, line_seq))""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS customer(
+        id      TEXT PRIMARY KEY,
+        name    TEXT NOT NULL,
+        phone   TEXT NOT NULL)""")
+
+
+def import_to_database(con, ros):
+
+    cur = con.cursor()
 
     inserted = skipped = 0
 
@@ -160,11 +171,69 @@ def import_to_database(con, ros):
                     inserted += 1
                 else:
                     skipped += 1
+
+    return inserted, skipped 
+
+
+# Fetch the next unenriched RO. Freshly imported RO's require "enrichment",
+# as they don't include the customer ID number or customer phone number
+# We'll serve up unenriched RO's in one queue, and as the user inputs the 
+# customer information (requires manual CRM lookup), they'll be shifted to
+# the actual decline contact queue
+def next_unenriched(con):
+    sql = """
+        SELECT ro_number, ro_date, customer_name
+        FROM repair_order 
+        WHERE customer_no IS NULL
+        ORDER BY ro_date, ro_number
+        LIMIT 1
+        """
+    cur = con.execute(sql)
+    return cur.fetchone()
+
+# Take sqlite3 row object
+def display_ro(ro, lines):
+    print("RO Number:", ro["ro_number"])
+    print("RO Date:", ro["ro_date"])
+    print("Customer name:", ro["customer_name"])
+    for l in lines:
+        print("Line:", l["opcode"],"---",l["description"])
+
+def fetch_lines(con, ro):
+    sql = """
+    SELECT d.opcode, d.description
+    FROM decline_line d
+    WHERE d.ro_number = (?)
+    """
+    res = con.execute(sql, (ro["ro_number"],))
+  
+    return res.fetchall()
+
+def display_line(line):
+    print("Opcode:", line["opcode"])
+    print("Desc:", line["description"])
+
+def serve_unenriched_ros(con):
+    while True:
+        ro = next_unenriched(con)
+        if ro is None:
+            print("All RO's enriched")
+            break
+        lines = fetch_lines(con, ro)    
+        display_ro(ro,lines)
+        cid = input("Enter id: ")
+        phone = input("Enter phone number: ")
+        con.execute("""
+        UPDATE repair_order
+        SET customer_no = (?), customer_phone = (?)
+        WHERE ro_number = (?)
+        """, (cid, phone, ro["ro_number"]))
+
+        con.execute("""
+        INSERT INTO customer (id, name, phone) VALUES (?, ?, ?) ON CONFLICT DO NOTHING""", 
+        (cid, ro["customer_name"], phone))
+        con.commit()
     
-    for row in cur.execute("SELECT ro_number, ro_date FROM repair_order"):
-        print(row)
-
-
 
 
 def main():
@@ -172,7 +241,12 @@ def main():
     ros = group_ros(rows)
     assign_seq_numbers(ros)
     con = sqlite3.connect("test.db")
+    con.row_factory = sqlite3.Row
+
+    init_db(con)
     import_to_database(con, ros)
+    serve_unenriched_ros(con)
+
 
 if __name__ == "__main__":
     main()
