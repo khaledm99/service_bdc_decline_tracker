@@ -350,11 +350,12 @@ def serve_contact_queue(con):
         con.commit()
 
 def display_contact(customer, ros):
-    print("ID",customer["customer_no"]+"    "+customer["name"]+"    "+customer["phone"])
+    print(f"ID {customer['customer_no']:<17} {customer['name']:^20} {customer['phone']:>20}")
     for r in ros:
-        print("\nRO",r["ro_number"],"-",r["ro_date"],"-",r["year"],r["make"],r["model"],"-",r["odometer"],"km")
+        print()
+        print(f"RO {r['ro_number']} -- {r['ro_date']} -- {r['year']} {r['make']} {r['model']} -- {r['odometer']}km")
         for l in r["lines"]:
-            print("  ",str(l["id"])+".","["+l["opcode"]+"]",l["description"],l["state"], l["next_due"])
+            print(f"  {f'{l["id"]}. [{l["opcode"]}]':<15} {l['description']:>20} {l['state']:>30}, {l['next_due']}")
 
 def main():
     rows = read_rows('lists/010126-311226.csv')
