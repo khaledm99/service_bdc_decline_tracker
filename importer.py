@@ -249,8 +249,6 @@ def serve_unenriched_ros(con):
         (cid, ro["customer_name"], phone))
         con.commit()
     
-        lines = fetch_lines(con, ro)    
-        display_ro(ro,lines)
 
 # Form: (current_state, action) -> (next_state, due_date)
 # due_date is tuple (type, value), where type is an offset and value is number of days to add,
@@ -269,6 +267,95 @@ TRANSITIONS = {
         ("awaiting_reply",   "booked"):             ("awaiting_appointment",("explicit", None))
 }
 
+def next_contact(con):
+    
+    # Helper function for next_contact
+    # takes list of sqlite3.Row objects from the second query in
+    # next_contact and groups ro's together with their decline lines per customer
+    def group_by_ro(rows):
+        ros = {}
+        for r in rows:
+            key = r["ro_number"]
+            if key not in ros:
+                ros[key] = {
+                    "ro_number": key,
+                    "ro_date": r["ro_date"],
+                    "advisor": r["advisor"],
+                    "year": r["year"],
+                    "make": r["make"],
+                    "model": r["model"],
+                    "odometer": r["odometer"],
+                    "lines": []
+                }
+            ros[key]["lines"].append({
+                "id": r["id"],
+                "opcode": r["opcode"],
+                "description": r["description"],
+                "state": r["state"],
+                "next_due": r["next_due"]
+            })
+        return list(ros.values())
+
+
+    res = con.execute("""
+        SELECT r.customer_no, c.name, c.phone, MIN(d.next_due) AS due
+        FROM decline_line d
+        JOIN repair_order r ON r.ro_number = d.ro_number
+        JOIN customer c ON c.id = r.customer_no
+        WHERE d.state = 'awaiting_contact'
+        AND d.next_due <= (?)
+        GROUP BY r.customer_no
+        ORDER BY due
+        LIMIT 1
+        """, (dt.today().isoformat(),))
+    customer = res.fetchone()
+    if not customer:
+        return None
+    res = con.execute("""
+        SELECT r.ro_number, r.ro_date, r.advisor, r.year, r.make, r.model, r.odometer, 
+               d.id, d.line_seq, d.opcode, d.description, d.state, d.next_due
+        FROM decline_line d
+        JOIN repair_order r ON d.ro_number = r.ro_number
+        WHERE r.customer_no = (?)
+        ORDER BY r.ro_date, d.line_seq
+        """, (customer["customer_no"],))
+    return (customer, group_by_ro(res.fetchall()))
+
+def serve_contact_queue(con):
+    while True:
+        ro = next_unenriched(con)
+        if ro is None:
+            print("All RO's enriched")
+            break
+        lines = fetch_lines(con, ro)    
+        display_ro(ro,lines)
+        cid = input("Enter id: ")
+        phone = input("Enter phone number: ")
+        con.execute("""
+        UPDATE repair_order
+        SET customer_no = (?), customer_phone = (?)
+        WHERE ro_number = (?)
+        """, (cid, phone, ro["ro_number"]))
+        
+        next_due = (date.fromisoformat(ro["ro_date"]) + timedelta(days=14)).isoformat()
+        con.execute("""
+        UPDATE decline_line
+        SET next_due = (?), state = "awaiting_contact"
+        WHERE ro_number = (?)
+        """, (next_due, ro["ro_number"]))
+
+        con.execute("""
+        INSERT INTO customer (id, name, phone) VALUES (?, ?, ?) ON CONFLICT DO NOTHING""", 
+        (cid, ro["customer_name"], phone))
+        con.commit()
+
+def display_contact(customer, ros):
+    print("ID",customer["customer_no"]+"    "+customer["name"]+"    "+customer["phone"])
+    for r in ros:
+        print("\nRO",r["ro_number"],"-",r["ro_date"],"-",r["year"],r["make"],r["model"],"-",r["odometer"],"km")
+        for l in r["lines"]:
+            print("  ",str(l["id"])+".","["+l["opcode"]+"]",l["description"],l["state"], l["next_due"])
+
 def main():
     rows = read_rows('lists/010126-311226.csv')
     ros = group_ros(rows)
@@ -278,7 +365,13 @@ def main():
 
     init_db(con)
     import_to_database(con, ros)
-    serve_unenriched_ros(con)
+    contact = next_contact(con)
+    display_contact(*contact)
+    contact = next_contact(con)
+    display_contact(*contact)
+    contact = next_contact(con)
+    display_contact(*contact)
+    #serve_unenriched_ros(con)
 
 
 if __name__ == "__main__":
