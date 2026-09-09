@@ -17,6 +17,8 @@
 import csv
 import sqlite3
 from datetime import datetime as dt
+from datetime import date
+from datetime import timedelta
 
 COLUMN_ALIASES = {
         "ro #": "ro_number",
@@ -117,7 +119,7 @@ def init_db(con):
         year            INTEGER NOT NULL,
         make            TEXT NOT NULL,
         model           TEXT NOT NULL,
-        vin             TEXT
+        vin             TEXT,
         odometer        INTEGER NOT NULL)""")
 
     cur.execute("""CREATE TABLE IF NOT EXISTS decline_line(
@@ -127,12 +129,15 @@ def init_db(con):
         opcode          TEXT NOT NULL,
         description     TEXT,
         status          TEXT,
+        state           TEXT NOT NULL DEFAULT 'new',
+        next_due        TEXT,
         UNIQUE (ro_number, line_seq))""")
 
     cur.execute("""CREATE TABLE IF NOT EXISTS customer(
         id      TEXT PRIMARY KEY,
         name    TEXT NOT NULL,
         phone   TEXT NOT NULL)""")
+    con.commit()
 
 
 def import_to_database(con, ros):
@@ -214,7 +219,7 @@ def fetch_lines(con, ro):
     return res.fetchall()
 
 def display_line(l):
-    print("Line",str(l["line_seq"])+":", l["opcode"],"---",l["description"])
+    print("Line",str(l["line_seq"])+":", l["opcode"],"---",l["description"],"Due:",l["next_due"],l["state"])
 
 def serve_unenriched_ros(con):
     while True:
@@ -231,13 +236,38 @@ def serve_unenriched_ros(con):
         SET customer_no = (?), customer_phone = (?)
         WHERE ro_number = (?)
         """, (cid, phone, ro["ro_number"]))
+        
+        next_due = (date.fromisoformat(ro["ro_date"]) + timedelta(days=14)).isoformat()
+        con.execute("""
+        UPDATE decline_line
+        SET next_due = (?), state = "awaiting_contact"
+        WHERE ro_number = (?)
+        """, (next_due, ro["ro_number"]))
 
         con.execute("""
         INSERT INTO customer (id, name, phone) VALUES (?, ?, ?) ON CONFLICT DO NOTHING""", 
         (cid, ro["customer_name"], phone))
         con.commit()
     
+        lines = fetch_lines(con, ro)    
+        display_ro(ro,lines)
 
+# Form: (current_state, action) -> (next_state, due_date)
+# due_date is tuple (type, value), where type is an offset and value is number of days to add,
+# or type is "explicit" and value is none. If type is "explicit", we'll input a specific date for the next due date
+# type can also be "none", which means we set the due_date on the decline line to NULL, signalling no further contact regarding that decline
+TRANSITIONS = {
+        ("awaiting_contact", "text_sent"):          ("awaiting_reply",      ("offset", 3)),
+        ("awaiting_contact", "call_made"):          ("awaiting_reply",      ("offset", 3)),
+        ("awaiting_contact", "skip"):               ("awaiting_contact",    ("offset", 7)),
+        ("awaiting_contact", "do_not_contact"):     ("closed_opt_out",      ("none", None)),
+        ("awaiting_contact", "already_done"):       ("closed_complete",     ("none", None)),
+        ("awaiting_reply",   "no_reply"):           ("awaiting_contact",    ("offset", 14)),
+        ("awaiting_reply",   "declined_again"):     ("awaiting_contact",    ("offset", 90)),
+        ("awaiting_reply",   "opt_out"):            ("closed_opt_out",      ("none", None)),
+        ("awaiting_reply",   "postpone"):           ("awaiting_contact",    ("explicit", None)),
+        ("awaiting_reply",   "booked"):             ("awaiting_appointment",("explicit", None))
+}
 
 def main():
     rows = read_rows('lists/010126-311226.csv')
