@@ -267,6 +267,13 @@ TRANSITIONS = {
         ("awaiting_reply",   "booked"):             ("awaiting_appointment",("explicit", None))
 }
 
+def get_legal_actions(state):
+    legal_actions = []
+    for key in TRANSITIONS.keys():
+        if key[0] == state:
+            legal_actions.append(key[1])
+    return legal_actions
+
 def next_contact(con):
     
     # Helper function for next_contact
@@ -323,39 +330,70 @@ def next_contact(con):
 
 def serve_contact_queue(con):
     while True:
-        ro = next_unenriched(con)
-        if ro is None:
-            print("All RO's enriched")
+        contact = next_contact(con)
+        if contact is None:
+            print("Contact Queue Empty")
             break
-        lines = fetch_lines(con, ro)    
-        display_ro(ro,lines)
-        cid = input("Enter id: ")
-        phone = input("Enter phone number: ")
-        con.execute("""
-        UPDATE repair_order
-        SET customer_no = (?), customer_phone = (?)
-        WHERE ro_number = (?)
-        """, (cid, phone, ro["ro_number"]))
-        
-        next_due = (date.fromisoformat(ro["ro_date"]) + timedelta(days=14)).isoformat()
-        con.execute("""
-        UPDATE decline_line
-        SET next_due = (?), state = "awaiting_contact"
-        WHERE ro_number = (?)
-        """, (next_due, ro["ro_number"]))
+        display_contact(*contact)
+
+        # select line
+        line = int(input("Select Decline Line: "))
+        selected_line = None
+        while selected_line == None:
+            for r in contact[1]:
+                for l in r["lines"]:
+                    if l["line_id"] == line:
+                        selected_line = l
+
+        # generate actionable items for that line
+        legal_actions = get_legal_actions(selected_line["state"])
+        action_id = 0
+        for a in legal_actions:
+            action_id +=1
+            print(str(action_id)+". "+a)
+        selected_action = int(input("Select action: "))
+        while selected_action < 1 or selected_action > action_id:
+            selected_action = int(input("Invalid choice. Select action: "))
+        action_str = legal_actions[selected_action-1]
+        print(action_str)
+        next_state, next_due = TRANSITIONS[(selected_line["state"],action_str)]
+        print(next_state, next_due)
+#("offset", 3)
+        def compute_new_date(rule, value, today):
+            if rule == "offset":
+                new_date = today + timedelta(days=value)
+                return new_date
+            if rule == "none":
+                return None
+            if rule == "explicit":
+                in_date = input("Input date (YYYY-MM-DD): ")
+                return date.fromisoformat(in_date)
+
+        new_date = compute_new_date(*next_due, date.today())
+        if new_date:
+            new_date = new_date.isoformat()
+
+        print(new_date)
+
 
         con.execute("""
-        INSERT INTO customer (id, name, phone) VALUES (?, ?, ?) ON CONFLICT DO NOTHING""", 
-        (cid, ro["customer_name"], phone))
+        UPDATE decline_line
+        SET next_due = (?), state = (?)
+        WHERE id = (?)
+        """, (new_date, next_state, selected_line["id"]))
+
         con.commit()
 
 def display_contact(customer, ros):
     print(f"ID {customer['customer_no']:<17} {customer['name']:^20} {customer['phone']:>20}")
+    line_id = 1
     for r in ros:
         print()
         print(f"RO {r['ro_number']} -- {r['ro_date']} -- {r['year']} {r['make']} {r['model']} -- {r['odometer']}km")
         for l in r["lines"]:
-            print(f"  {f'{l["id"]}. [{l["opcode"]}]':<15} {l['description']:>20} {l['state']:>30}, {l['next_due']}")
+            l["line_id"] = line_id
+            line_id += 1
+            print(f"  {f'{l["line_id"]}. [{l["opcode"]}]':<15.15} {l['description']:<60.60} {l['state']:>30.30}, {l['next_due']}")
 
 def main():
     rows = read_rows('lists/010126-311226.csv')
@@ -366,12 +404,7 @@ def main():
 
     init_db(con)
     import_to_database(con, ros)
-    contact = next_contact(con)
-    display_contact(*contact)
-    contact = next_contact(con)
-    display_contact(*contact)
-    contact = next_contact(con)
-    display_contact(*contact)
+    serve_contact_queue(con)
     #serve_unenriched_ros(con)
 
 
