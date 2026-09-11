@@ -44,6 +44,19 @@ def read_rows(path):
     with open(path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         mapping = {}
+        REQUIRED = {
+            "ro_number",
+            "ro_closed_date",
+            "advisor",
+            "customer_name",
+            "year",
+            "make",
+            "model",
+            "odometer",
+            "opcode",
+            "desc",
+            "status"
+        }
         for raw in reader.fieldnames:
             #normalize header to lowercase and remove leading/trailing whitespace
             nraw = " ".join(raw.lower().split())
@@ -53,19 +66,7 @@ def read_rows(path):
             if internal:
                 mapping[raw] = internal
 
-            REQUIRED = {
-                "ro_number",
-                "ro_closed_date",
-                "advisor",
-                "customer_name",
-                "year",
-                "make",
-                "model",
-                "odometer",
-                "opcode",
-                "desc",
-                "status"
-            }
+            
         # make sure required columns are present
         # if any are missing, output which ones to inspect crm output
         MISSING = REQUIRED - set(mapping.values())
@@ -208,7 +209,7 @@ def display_ro(ro, lines):
     print("RO Date:", ro["ro_date"])
     print("Customer name:", ro["customer_name"])
     print("Customer no:", ro["customer_no"])
-    print("Advisor:", ro["customer_name"])
+    print("Advisor:", ro["Advisor"])
     print("Vehicle:", ro["year"], ro["make"], ro["model"])
     print("Odometer:", ro["odometer"])
     for l in lines:
@@ -242,23 +243,24 @@ def serve_unenriched_ros(con):
         phone = input("Enter phone number: ")
         while not phone.isdigit() or len(phone) != 10:
             phone = input("Invalid phone number. Enter phone number: ")
-        con.execute("""
-        UPDATE repair_order
-        SET customer_no = (?), customer_phone = (?)
-        WHERE ro_number = (?)
-        """, (cid, phone, ro["ro_number"]))
-        
-        next_due = (date.fromisoformat(ro["ro_date"]) + timedelta(days=14)).isoformat()
-        con.execute("""
-        UPDATE decline_line
-        SET next_due = (?), state = "awaiting_contact"
-        WHERE ro_number = (?)
-        """, (next_due, ro["ro_number"]))
+        with con:
+            con.execute("""
+            INSERT INTO customer (id, name, phone) VALUES (?, ?, ?) ON CONFLICT DO NOTHING""", 
+            (cid, ro["customer_name"], phone))
 
-        con.execute("""
-        INSERT INTO customer (id, name, phone) VALUES (?, ?, ?) ON CONFLICT DO NOTHING""", 
-        (cid, ro["customer_name"], phone))
-        con.commit()
+            con.execute("""
+            UPDATE repair_order
+            SET customer_no = (?), customer_phone = (?)
+            WHERE ro_number = (?)
+            """, (cid, phone, ro["ro_number"]))
+            
+            next_due = (date.fromisoformat(ro["ro_date"]) + timedelta(days=14)).isoformat()
+            con.execute("""
+            UPDATE decline_line
+            SET next_due = (?), state = "awaiting_contact"
+            WHERE ro_number = (?)
+            """, (next_due, ro["ro_number"]))
+
     
 
 # Form: (current_state, action) -> (next_state, due_date)
@@ -340,7 +342,9 @@ def next_contact(con):
         WHERE r.customer_no = (?)
         ORDER BY r.ro_date, d.line_seq
         """, (customer["customer_no"],))
-    return (customer, group_by_ro(res.fetchall()))
+    ros = group_by_ro(res.fetchall())
+    assign_line_ids(ros)
+    return (customer, ros)
 
 def serve_contact_queue(con):
     while True:
@@ -414,16 +418,20 @@ def serve_contact_queue(con):
 
         con.commit()
 
+def assign_line_ids(ros):
+    line_id = 1
+    for r in ros:
+        for l in r["lines"]:
+            l["line_id"] = line_id
+            line_id += 1
+
 def display_contact(customer, ros):
     clear_terminal()
     print(f"ID {customer['customer_no']:<17} {customer['name']:^20} {customer['phone']:>20}")
-    line_id = 1
     for r in ros:
         print()
         print(f"RO {r['ro_number']} -- {r['ro_date']} -- {r['year']} {r['make']} {r['model']} -- {r['odometer']}km")
         for l in r["lines"]:
-            l["line_id"] = line_id
-            line_id += 1
             print(f"  {f'{l["line_id"]}. [{l["opcode"]}]':<15.15} {l['description']:<60.60} {l['state']:>30.30}, {l['next_due']}")
 
 def main():
