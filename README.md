@@ -2,16 +2,18 @@
 A python script for processing declined services and scheduling them for customer contact
 
 ## Roadmap
-- CSV Import
+
+- CSV Import (DONE)
     - Import and sanitize csv files containing service decline data
     - Evenly split csv data and give the option to import subsets into
       app or output styled html tables for printing
+        - PUSHED OUT OF SCOPE
     - Sanitize malformed data and column names (constraint from CRM we're
       getting data from, as it regularly changes the date format and column names
     - bundle decline lines by RO (repair order) number
     - move RO's to lookup queue
 
-- Lookup Queue
+- Lookup Queue (DONE)
     - Imported data does not include customer id's or phone numbers. Requires
       manual lookup
     - Present newly imported RO's one-by-one to lookup customer id and phone

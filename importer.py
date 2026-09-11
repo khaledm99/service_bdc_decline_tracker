@@ -14,6 +14,7 @@
 # normalize and map column headers
 # read rows into dicts using DictReader
 
+import os
 import csv
 import sqlite3
 from datetime import datetime as dt
@@ -34,6 +35,9 @@ COLUMN_ALIASES = {
         "op code name": "desc",
         "task status": "status"
 }
+
+def clear_terminal():
+    os.system('cls' if os.name == 'nt' else 'clear')
 
 def read_rows(path):
     with open(path, newline="", encoding="utf-8-sig") as f:
@@ -73,9 +77,9 @@ def read_rows(path):
             for h in mapping:
                 line[mapping[h]] = row[h]
             rows.append(line)
-        return rows
         # return a row in the form:
         # {"ro_number": "123456", "ro_closed_date": "datetime"...}
+        return rows
 
 def group_ros(rows):
     # group rows by repair order
@@ -198,6 +202,7 @@ def next_unenriched(con):
 
 # Take sqlite3 row object
 def display_ro(ro, lines):
+    clear_terminal()
     print("RO Number:", ro["ro_number"])
     print("RO Date:", ro["ro_date"])
     print("Customer name:", ro["customer_name"])
@@ -225,6 +230,7 @@ def serve_unenriched_ros(con):
     while True:
         ro = next_unenriched(con)
         if ro is None:
+            clear_terminal()
             print("All RO's enriched")
             break
         lines = fetch_lines(con, ro)    
@@ -255,16 +261,20 @@ def serve_unenriched_ros(con):
 # or type is "explicit" and value is none. If type is "explicit", we'll input a specific date for the next due date
 # type can also be "none", which means we set the due_date on the decline line to NULL, signalling no further contact regarding that decline
 TRANSITIONS = {
-        ("awaiting_contact", "text_sent"):          ("awaiting_reply",      ("offset", 3)),
-        ("awaiting_contact", "call_made"):          ("awaiting_reply",      ("offset", 3)),
-        ("awaiting_contact", "skip"):               ("awaiting_contact",    ("offset", 7)),
-        ("awaiting_contact", "do_not_contact"):     ("closed_opt_out",      ("none", None)),
-        ("awaiting_contact", "already_done"):       ("closed_complete",     ("none", None)),
-        ("awaiting_reply",   "no_reply"):           ("awaiting_contact",    ("offset", 14)),
-        ("awaiting_reply",   "declined_again"):     ("awaiting_contact",    ("offset", 90)),
-        ("awaiting_reply",   "opt_out"):            ("closed_opt_out",      ("none", None)),
-        ("awaiting_reply",   "postpone"):           ("awaiting_contact",    ("explicit", None)),
-        ("awaiting_reply",   "booked"):             ("awaiting_appointment",("explicit", None))
+        ("awaiting_contact",    "text_sent"):          ("awaiting_reply",      ("offset", 3)),
+        ("awaiting_contact",    "call_made"):          ("awaiting_reply",      ("offset", 3)),
+        ("awaiting_contact",    "skip"):               ("awaiting_contact",    ("offset", 7)),
+        ("awaiting_contact",    "do_not_contact"):     ("closed_opt_out",      ("none", None)),
+        ("awaiting_contact",    "already_done"):       ("closed_complete",     ("none", None)),
+        ("awaiting_reply",      "no_reply"):           ("awaiting_contact",    ("offset", 14)),
+        ("awaiting_reply",      "declined_again"):     ("awaiting_contact",    ("offset", 90)),
+        ("awaiting_reply",      "opt_out"):            ("closed_opt_out",      ("none", None)),
+        ("awaiting_reply",      "postpone"):           ("awaiting_contact",    ("explicit", None)),
+        ("awaiting_reply",      "booked"):             ("awaiting_appointment",("explicit", None)),
+        ("awaiting_appointment","complete"):           ("closed_complete",     ("none", None)),
+        ("awaiting_appointment","no_show"):            ("awaiting_contact",    ("offset", 1)),
+        ("awaiting_appointment","cancel"):             ("awaiting_contact",    ("offset", 7)),
+
 }
 
 def get_legal_actions(state):
@@ -309,8 +319,7 @@ def next_contact(con):
         FROM decline_line d
         JOIN repair_order r ON r.ro_number = d.ro_number
         JOIN customer c ON c.id = r.customer_no
-        WHERE d.state = 'awaiting_contact'
-        AND d.next_due <= (?)
+        WHERE d.next_due <= (?) AND state != 'new'
         GROUP BY r.customer_no
         ORDER BY due
         LIMIT 1
@@ -348,6 +357,9 @@ def serve_contact_queue(con):
         # generate actionable items for that line
         legal_actions = get_legal_actions(selected_line["state"])
         action_id = 0
+        if not legal_actions:
+            input("No available actions, press ENTER to continue...")
+            continue
         for a in legal_actions:
             action_id +=1
             print(str(action_id)+". "+a)
@@ -355,10 +367,8 @@ def serve_contact_queue(con):
         while selected_action < 1 or selected_action > action_id:
             selected_action = int(input("Invalid choice. Select action: "))
         action_str = legal_actions[selected_action-1]
-        print(action_str)
         next_state, next_due = TRANSITIONS[(selected_line["state"],action_str)]
-        print(next_state, next_due)
-#("offset", 3)
+
         def compute_new_date(rule, value, today):
             if rule == "offset":
                 new_date = today + timedelta(days=value)
@@ -373,9 +383,6 @@ def serve_contact_queue(con):
         if new_date:
             new_date = new_date.isoformat()
 
-        print(new_date)
-
-
         con.execute("""
         UPDATE decline_line
         SET next_due = (?), state = (?)
@@ -385,6 +392,7 @@ def serve_contact_queue(con):
         con.commit()
 
 def display_contact(customer, ros):
+    clear_terminal()
     print(f"ID {customer['customer_no']:<17} {customer['name']:^20} {customer['phone']:>20}")
     line_id = 1
     for r in ros:
@@ -404,8 +412,8 @@ def main():
 
     init_db(con)
     import_to_database(con, ros)
-    serve_contact_queue(con)
     #serve_unenriched_ros(con)
+    serve_contact_queue(con)
 
 
 if __name__ == "__main__":
