@@ -17,6 +17,7 @@
 import os
 import csv
 import sqlite3
+import argparse
 from datetime import datetime as dt
 from datetime import date
 from datetime import timedelta
@@ -236,7 +237,11 @@ def serve_unenriched_ros(con):
         lines = fetch_lines(con, ro)    
         display_ro(ro,lines)
         cid = input("Enter id: ")
+        while not cid.isdigit() or len(cid) != 6:
+            cid = input("Invalid id. Enter id: ")
         phone = input("Enter phone number: ")
+        while not phone.isdigit() or len(phone) != 10:
+            phone = input("Invalid phone number. Enter phone number: ")
         con.execute("""
         UPDATE repair_order
         SET customer_no = (?), customer_phone = (?)
@@ -346,13 +351,23 @@ def serve_contact_queue(con):
         display_contact(*contact)
 
         # select line
-        line = int(input("Select Decline Line: "))
+        line = input("Select Decline Line: ")
+        while not line.isdigit():
+            line = input("Invalid selection. Select Decline Line: ")
+
+        line = int(line)
         selected_line = None
         while selected_line == None:
             for r in contact[1]:
                 for l in r["lines"]:
                     if l["line_id"] == line:
                         selected_line = l
+            if selected_line == None:
+                line = input("Invalid selection. Select Decline Line: ")
+                while not line.isdigit():
+                    line = input("Invalid selection. Select Decline Line: ")
+                line = int(line)
+
 
         # generate actionable items for that line
         legal_actions = get_legal_actions(selected_line["state"])
@@ -363,9 +378,10 @@ def serve_contact_queue(con):
         for a in legal_actions:
             action_id +=1
             print(str(action_id)+". "+a)
-        selected_action = int(input("Select action: "))
-        while selected_action < 1 or selected_action > action_id:
-            selected_action = int(input("Invalid choice. Select action: "))
+        selected_action = input("Select action: ")
+        while not selected_action.isdigit() or int(selected_action) < 1 or int(selected_action) > action_id:
+            selected_action = input("Invalid choice. Select action: ")
+        selected_action = int(selected_action)
         action_str = legal_actions[selected_action-1]
         next_state, next_due = TRANSITIONS[(selected_line["state"],action_str)]
 
@@ -379,7 +395,14 @@ def serve_contact_queue(con):
                 in_date = input("Input date (YYYY-MM-DD): ")
                 return date.fromisoformat(in_date)
 
-        new_date = compute_new_date(*next_due, date.today())
+        new_date = None
+        while True:
+            try:
+                new_date = compute_new_date(*next_due, date.today())
+                break
+            except ValueError:
+                print("Not a valid date. Use YYYY-MM-DD.")
+
         if new_date:
             new_date = new_date.isoformat()
 
@@ -404,7 +427,11 @@ def display_contact(customer, ros):
             print(f"  {f'{l["line_id"]}. [{l["opcode"]}]':<15.15} {l['description']:<60.60} {l['state']:>30.30}, {l['next_due']}")
 
 def main():
-    rows = read_rows('lists/010126-311226.csv')
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("path", type=str, help="Filepath to csv")
+    args = parser.parse_args()
+    rows = read_rows(args.path)
     ros = group_ros(rows)
     assign_seq_numbers(ros)
     con = sqlite3.connect("test.db")
@@ -412,7 +439,7 @@ def main():
 
     init_db(con)
     import_to_database(con, ros)
-    #serve_unenriched_ros(con)
+    serve_unenriched_ros(con)
     serve_contact_queue(con)
 
 
