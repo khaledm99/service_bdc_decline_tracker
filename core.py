@@ -43,7 +43,10 @@ def clear_terminal():
 def read_rows(path):
     with open(path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
+
+        # map imported raw header names to standard names for internal use
         mapping = {}
+
         REQUIRED = {
             "ro_number",
             "ro_closed_date",
@@ -57,9 +60,12 @@ def read_rows(path):
             "desc",
             "status"
         }
+
+
         for raw in reader.fieldnames:
             #normalize header to lowercase and remove leading/trailing whitespace
             nraw = " ".join(raw.lower().split())
+
             #check header aliases and build mapping from 
             #normalized raw headers to standard internal header names
             internal = COLUMN_ALIASES.get(nraw)
@@ -79,6 +85,7 @@ def read_rows(path):
             for h in mapping:
                 line[mapping[h]] = row[h]
             rows.append(line)
+
         # return a row in the form:
         # {"ro_number": "123456", "ro_closed_date": "datetime"...}
         return rows
@@ -215,6 +222,7 @@ def display_ro(ro, lines):
     for l in lines:
         display_line(l)
 
+# Fetch decline lines associated with a single RO
 def fetch_lines(con, ro):
     sql = """
     SELECT *
@@ -228,21 +236,27 @@ def fetch_lines(con, ro):
 def display_line(l):
     print("Line",str(l["line_seq"])+":", l["opcode"],"---",l["description"],"Due:",l["next_due"],l["state"])
 
+# Serve unenriched RO's one-by-one, take user input to add customer ID and phone number
 def serve_unenriched_ros(con):
     while True:
         ro = next_unenriched(con)
+
         if ro is None:
             clear_terminal()
             print("All RO's enriched")
             break
+
         lines = fetch_lines(con, ro)    
         display_ro(ro,lines)
+
         cid = input("Enter id: ")
         while not cid.isdigit() or len(cid) != 6:
             cid = input("Invalid id. Enter id: ")
+
         phone = input("Enter phone number: ")
         while not phone.isdigit() or len(phone) != 10:
             phone = input("Invalid phone number. Enter phone number: ")
+
         with con:
             con.execute("""
             INSERT INTO customer (id, name, phone) VALUES (?, ?, ?) ON CONFLICT DO NOTHING""", 
@@ -298,8 +312,10 @@ def next_contact(con):
     # next_contact and groups ro's together with their decline lines per customer
     def group_by_ro(rows):
         ros = {}
+
         for r in rows:
             key = r["ro_number"]
+
             if key not in ros:
                 ros[key] = {
                     "ro_number": key,
@@ -331,9 +347,12 @@ def next_contact(con):
         ORDER BY due
         LIMIT 1
         """, (dt.today().isoformat(),))
+
     customer = res.fetchone()
+
     if not customer:
         return None
+
     res = con.execute("""
         SELECT r.ro_number, r.ro_date, r.advisor, r.year, r.make, r.model, r.odometer, 
                d.id, d.line_seq, d.opcode, d.description, d.state, d.next_due
@@ -342,10 +361,14 @@ def next_contact(con):
         WHERE r.customer_no = (?)
         ORDER BY r.ro_date, d.line_seq
         """, (customer["customer_no"],))
+
     ros = group_by_ro(res.fetchall())
     assign_line_ids(ros)
+
     return (customer, ros)
 
+# Serve due contact tasks one-by-one. Presents a customer with any due
+# contact tasks - displays all active RO's and decline lines
 def serve_contact_queue(con):
     while True:
         contact = next_contact(con)
@@ -361,6 +384,7 @@ def serve_contact_queue(con):
 
         line = int(line)
         selected_line = None
+
         while selected_line == None:
             for r in contact[1]:
                 for l in r["lines"]:
@@ -375,16 +399,21 @@ def serve_contact_queue(con):
 
         # generate actionable items for that line
         legal_actions = get_legal_actions(selected_line["state"])
+
         action_id = 0
         if not legal_actions:
             input("No available actions, press ENTER to continue...")
             continue
+
         for a in legal_actions:
             action_id +=1
             print(str(action_id)+". "+a)
+
         selected_action = input("Select action: ")
+
         while not selected_action.isdigit() or int(selected_action) < 1 or int(selected_action) > action_id:
             selected_action = input("Invalid choice. Select action: ")
+
         selected_action = int(selected_action)
         action_str = legal_actions[selected_action-1]
         next_state, next_due = TRANSITIONS[(selected_line["state"],action_str)]
