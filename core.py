@@ -236,6 +236,26 @@ def fetch_lines(con, ro):
 def display_line(l):
     print("Line",str(l["line_seq"])+":", l["opcode"],"---",l["description"],"Due:",l["next_due"],l["state"])
 
+# Add customer info to Customer table and add customer id and phone to RO
+def enrich_ro(con, ro, cid, phone):
+    with con:
+        con.execute("""
+        INSERT INTO customer (id, name, phone) VALUES (?, ?, ?) ON CONFLICT DO NOTHING""", 
+        (cid, ro["customer_name"], phone))
+
+        con.execute("""
+        UPDATE repair_order
+        SET customer_no = (?), customer_phone = (?)
+        WHERE ro_number = (?)
+        """, (cid, phone, ro["ro_number"]))
+        
+        next_due = (date.fromisoformat(ro["ro_date"]) + timedelta(days=14)).isoformat()
+        con.execute("""
+        UPDATE decline_line
+        SET next_due = (?), state = "awaiting_contact"
+        WHERE ro_number = (?)
+        """, (next_due, ro["ro_number"]))
+
 # Serve unenriched RO's one-by-one, take user input to add customer ID and phone number
 def serve_unenriched_ros(con):
     while True:
@@ -257,24 +277,9 @@ def serve_unenriched_ros(con):
         while not phone.isdigit() or len(phone) != 10:
             phone = input("Invalid phone number. Enter phone number: ")
 
-        with con:
-            con.execute("""
-            INSERT INTO customer (id, name, phone) VALUES (?, ?, ?) ON CONFLICT DO NOTHING""", 
-            (cid, ro["customer_name"], phone))
+        enrich_ro(con, ro, cid, phone)
 
-            con.execute("""
-            UPDATE repair_order
-            SET customer_no = (?), customer_phone = (?)
-            WHERE ro_number = (?)
-            """, (cid, phone, ro["ro_number"]))
-            
-            next_due = (date.fromisoformat(ro["ro_date"]) + timedelta(days=14)).isoformat()
-            con.execute("""
-            UPDATE decline_line
-            SET next_due = (?), state = "awaiting_contact"
-            WHERE ro_number = (?)
-            """, (next_due, ro["ro_number"]))
-
+        
     
 
 # Form: (current_state, action) -> (next_state, due_date)
@@ -367,6 +372,15 @@ def next_contact(con):
 
     return (customer, ros)
 
+def update_decline_state(con, decline_id, next_state, new_date):
+    con.execute("""
+    UPDATE decline_line
+    SET next_due = (?), state = (?)
+    WHERE id = (?)
+    """, (new_date, next_state, decline_id))
+
+    con.commit()
+
 # Serve due contact tasks one-by-one. Presents a customer with any due
 # contact tasks - displays all active RO's and decline lines
 def serve_contact_queue(con):
@@ -439,13 +453,7 @@ def serve_contact_queue(con):
         if new_date:
             new_date = new_date.isoformat()
 
-        con.execute("""
-        UPDATE decline_line
-        SET next_due = (?), state = (?)
-        WHERE id = (?)
-        """, (new_date, next_state, selected_line["id"]))
-
-        con.commit()
+        update_decline_state(con, selected_line["id"], next_state, new_date)
 
 def assign_line_ids(ros):
     line_id = 1
