@@ -322,6 +322,7 @@ TRANSITIONS = {
         ("awaiting_appointment","cancel"):             ("awaiting_contact",    ("offset", 7)),
 
 }
+DATE_ACTIONS = ["postpone", "booked"]
 
 def get_legal_actions(state):
     legal_actions = []

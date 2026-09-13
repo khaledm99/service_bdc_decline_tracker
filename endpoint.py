@@ -3,7 +3,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 import core
 import sqlite3
-from datetime import date
+from datetime import date, timedelta
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
@@ -74,7 +74,7 @@ def contact_next(request: Request):
     for r in ros:
         for l in r["lines"]:
             l["actions"] = core.get_legal_actions(l["state"])
-    return templates.TemplateResponse(request, "contact.html", {"customer" : customer, "ros": ros, "today": today})
+    return templates.TemplateResponse(request, "contact.html", {"customer" : customer, "ros": ros, "today": today, "date_actions": core.DATE_ACTIONS})
 
 @app.get("/find")
 def find(request: Request, customer_no: str = ""):
@@ -99,10 +99,35 @@ def contact_one(request: Request, customer_no: str):
     for r in ros:
         for l in r["lines"]:
             l["actions"] = core.get_legal_actions(l["state"])
-    return templates.TemplateResponse(request, "contact.html", {"customer" : customer, "ros": ros, "today": today})
+    return templates.TemplateResponse(request, "contact.html", {"customer" : customer, "ros": ros, "today": today, "date_actions": core.DATE_ACTIONS})
 
 @app.post("/contact/{customer_no}/line/{line_id}")
 def apply(customer_no: str, line_id: int, action:str = Form(...), explicit_date: str = Form(None)):
     con = get_connection()
-    core.update_decline_state(con, line_id, action, explicit_date)
+    res = con.execute("SELECT state FROM decline_line WHERE id = ?", (line_id,))
+    state = res.fetchone()["state"]
+    next_state, next_due = core.TRANSITIONS[(state, action)]
+    #if not explicit_date:
+        #date = next_due
+    #else:
+        #date = explicit_date
+    def compute_new_date(rule, value, today, explicit_date = None):
+        print(explicit_date)
+        if rule == "offset":
+            new_date = today + timedelta(days=value)
+            return new_date.isoformat()
+        if rule == "none":
+            return None
+        if explicit_date is None:
+            raise ValueError("This action requires a date")
+        return explicit_date
+    new_date = None
+    try:
+        new_date = compute_new_date(*next_due, date.today(), explicit_date)
+    except ValueError as e:
+        print(e)
+
+
+
+    core.update_decline_state(con, line_id, next_state, new_date)
     return RedirectResponse(f"/contact/{customer_no}", status_code=303)
