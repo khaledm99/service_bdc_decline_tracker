@@ -32,6 +32,15 @@
 
   a { color: var(--go); }
 
+  .topbar {
+    padding: 1.2rem 0;
+    font-size: 0.9rem;
+    display: flex;
+    gap: 1.2rem;
+  }
+  .topbar a { color: var(--muted); text-decoration: none; }
+  .topbar a:hover { color: var(--go); }
+
   h1 {
     font-size: 1.3rem;
     font-weight: 600;
@@ -116,6 +125,11 @@
 <body>
 <div class="wrap">
 
+  <nav class="topbar">
+    <a href="/contact">Contact queue</a>
+    <a href="/enrich">Lookups</a>
+    <a href="/import">Import</a>
+  </nav>
   <h1>Import declines</h1>
   <p class="lede">Upload this week's declined service export. Re-importing a file you've already
      loaded changes nothing.</p>

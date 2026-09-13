@@ -71,6 +71,14 @@
     text-decoration: none;
   }
 
+  .topbar {
+    padding: 1.2rem 0;
+    font-size: 0.9rem;
+    display: flex;
+    gap: 1.2rem;
+  }
+  .topbar a { color: var(--muted); text-decoration: none; }
+  .topbar a:hover { color: var(--go); }
   /* ---- repair orders ------------------------------------------- */
 
   .ro { margin-top: 2rem; }
@@ -169,6 +177,12 @@
 </head>
 <body>
 <div class="wrap">
+
+  <nav class="topbar">
+    <a href="/contact">Contact queue</a>
+    <a href="/enrich">Lookups</a>
+    <a href="/import">Import</a>
+  </nav>
 
   <header class="who">
     <a class="phone" href="tel:{{ customer.phone }}">{{ customer.phone }}</a>

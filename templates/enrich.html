@@ -32,6 +32,14 @@
 
   a { color: var(--go); }
 
+  .topbar {
+    padding: 1.2rem 0;
+    font-size: 0.9rem;
+    display: flex;
+    gap: 1.2rem;
+  }
+  .topbar a { color: var(--muted); text-decoration: none; }
+  .topbar a:hover { color: var(--go); }
   .progress {
     padding: 1.2rem 0 0.8rem;
     color: var(--muted);
@@ -167,6 +175,12 @@
 </head>
 <body>
 <div class="wrap">
+
+  <nav class="topbar">
+    <a href="/contact">Contact queue</a>
+    <a href="/enrich">Lookups</a>
+    <a href="/import">Import</a>
+  </nav>
 
   <p class="progress">
     <span>{{ remaining }} repair orders left to look up</span>

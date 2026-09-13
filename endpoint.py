@@ -67,7 +67,7 @@ def contact_next(request: Request):
     con = get_connection()
     res = core.next_contact(con)
     if res is None:
-        return templates.TemplateResponse(request, "empty.html", {})
+        return templates.TemplateResponse(request, "contact_done.html", {})
     customer, ros = res
     core.assign_line_ids(ros)
     today = date.today().isoformat()
