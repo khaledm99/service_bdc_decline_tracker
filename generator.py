@@ -208,6 +208,9 @@ def build_example(rng, n_customers, start, end):
 
     # generate ROs
 
+    # file correlating ROs to customer no's, for mimicing manual crm customer lookup
+    crm = []
+
     ros = []
     ro_number = random.randrange(100000, 400000)
     for v in flattened_visits:
@@ -219,6 +222,7 @@ def build_example(rng, n_customers, start, end):
             v[0],
             _gen_declines()
         ))
+        crm.append((ro_number, v[0].customer_no))
         
         # Not all RO's will have declines. Realistically add gaps in ro number sequence
         ro_number += random.randrange(1,12)
@@ -229,6 +233,7 @@ def build_example(rng, n_customers, start, end):
     start_str = start.strftime('%d%m%y')
     end_str = end.strftime('%d%m%y')
     filename = "lists/"+start_str + '-' + end_str + '.csv'
+    crm_filename = "lists/"+start_str + '-' + end_str + '_crm.csv'
 
 
 
@@ -240,6 +245,13 @@ def build_example(rng, n_customers, start, end):
         rows = []
         for ro in ros:
             rows += _make_ro_rows(ro)
+        w.writerows(rows)
+
+    with open(crm_filename, 'w', newline='') as f:
+        w = csv.writer(f)
+        rows = []
+        for r in crm:
+            rows.append([str(r[0]), str(r[1])])
         w.writerows(rows)
     #for r in ros:
         #print(r)

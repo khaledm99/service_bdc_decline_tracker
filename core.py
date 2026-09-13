@@ -310,38 +310,39 @@ def get_legal_actions(state):
             legal_actions.append(key[1])
     return legal_actions
 
+# Helper function for next_contact and get_customer
+# takes list of sqlite3.Row objects from the second query in
+# next_contact and groups ro's together with their decline lines per customer
+def group_by_ro(rows):
+    ros = {}
+
+    for r in rows:
+        key = r["ro_number"]
+
+        if key not in ros:
+            ros[key] = {
+                "ro_number": key,
+                "ro_date": r["ro_date"],
+                "advisor": r["advisor"],
+                "year": r["year"],
+                "make": r["make"],
+                "model": r["model"],
+                "odometer": r["odometer"],
+                "lines": []
+            }
+        ros[key]["lines"].append({
+            "id": r["id"],
+            "opcode": r["opcode"],
+            "description": r["description"],
+            "state": r["state"],
+            "next_due": r["next_due"]
+        })
+    return list(ros.values())
+
+
 def next_contact(con):
     
-    # Helper function for next_contact
-    # takes list of sqlite3.Row objects from the second query in
-    # next_contact and groups ro's together with their decline lines per customer
-    def group_by_ro(rows):
-        ros = {}
-
-        for r in rows:
-            key = r["ro_number"]
-
-            if key not in ros:
-                ros[key] = {
-                    "ro_number": key,
-                    "ro_date": r["ro_date"],
-                    "advisor": r["advisor"],
-                    "year": r["year"],
-                    "make": r["make"],
-                    "model": r["model"],
-                    "odometer": r["odometer"],
-                    "lines": []
-                }
-            ros[key]["lines"].append({
-                "id": r["id"],
-                "opcode": r["opcode"],
-                "description": r["description"],
-                "state": r["state"],
-                "next_due": r["next_due"]
-            })
-        return list(ros.values())
-
-
+    
     res = con.execute("""
         SELECT r.customer_no, c.name, c.phone, MIN(d.next_due) AS due
         FROM decline_line d
@@ -352,6 +353,23 @@ def next_contact(con):
         ORDER BY due
         LIMIT 1
         """, (dt.today().isoformat(),))
+
+    customer_rows = res.fetchone()
+    if not customer_rows:
+        return None
+
+    return get_customer(con, customer_rows["customer_no"])
+
+def get_customer(con, customer_no):
+    
+    res = con.execute("""
+        SELECT r.customer_no, c.name, c.phone
+        FROM decline_line d
+        JOIN repair_order r ON r.ro_number = d.ro_number
+        JOIN customer c ON c.id = r.customer_no
+        WHERE c.id = ?
+        LIMIT 1
+        """, (customer_no,))
 
     customer = res.fetchone()
 
@@ -371,6 +389,7 @@ def next_contact(con):
     assign_line_ids(ros)
 
     return (customer, ros)
+
 
 def update_decline_state(con, decline_id, next_state, new_date):
     con.execute("""

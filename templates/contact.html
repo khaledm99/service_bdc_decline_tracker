@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ customer.name }} — contact queue</title>
+<style>
+  :root {
+    --ground:   #F4F6F5;
+    --surface:  #FFFFFF;
+    --ink:      #1B2422;
+    --muted:    #6C7A76;
+    --rule:     #DCE2E0;
+    --go:       #14584A;
+    --overdue:  #A8372B;
+    --booked:   #2C5578;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 0 1rem 4rem;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.45;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .wrap { max-width: 980px; margin: 0 auto; }
+
+  a { color: var(--go); }
+
+  /* ---- customer header ---------------------------------------- */
+
+  .who {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--ground);
+    padding: 1.5rem 0 1rem;
+    border-bottom: 1px solid var(--rule);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem 1.5rem;
+  }
+
+  .phone {
+    font-size: 2.4rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    text-decoration: none;
+    color: var(--ink);
+  }
+  .phone:hover { color: var(--go); }
+
+  .who .name { font-size: 1.1rem; font-weight: 600; }
+  .who .cid  { color: var(--muted); }
+  .who .spacer { flex: 1; }
+
+  .nextlink {
+    font-size: 0.9rem;
+    padding: 0.4rem 0.8rem;
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    background: var(--surface);
+    text-decoration: none;
+  }
+
+  /* ---- repair orders ------------------------------------------- */
+
+  .ro { margin-top: 2rem; }
+
+  .ro h2 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.9rem;
+    align-items: baseline;
+  }
+  .ro h2 .ronum { font-size: 1.1rem; }
+  .ro h2 .fact { font-weight: 400; color: var(--muted); }
+
+  /* ---- decline lines ------------------------------------------- */
+
+  .line {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 4px solid var(--rule);
+    padding: 0.7rem 0.9rem;
+    margin-bottom: 0.35rem;
+  }
+  .line.due      { border-left-color: var(--overdue); }
+  .line.pending  { border-left-color: var(--go); }
+  .line.booked   { border-left-color: var(--booked); }
+  .line.closed   { background: transparent; color: var(--muted); }
+
+  .line .top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.6rem;
+  }
+  .line .num  { color: var(--muted); min-width: 1.5rem; }
+  .line .op   { font-weight: 600; }
+  .line .desc { flex: 1; min-width: 12rem; }
+  .line .when { color: var(--muted); font-size: 0.9rem; white-space: nowrap; }
+  .line.due .when { color: var(--overdue); font-weight: 600; }
+
+  /* ---- actions -------------------------------------------------- */
+
+  form { margin: 0.6rem 0 0; display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
+
+  button {
+    font: inherit;
+    font-size: 0.88rem;
+    padding: 0.35rem 0.7rem;
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--go); color: var(--go); }
+  button.needs-date { border-style: dashed; }
+
+  input[type="date"] {
+    font: inherit;
+    font-size: 0.88rem;
+    padding: 0.3rem 0.4rem;
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    background: var(--surface);
+    color: var(--ink);
+  }
+
+  input[type="text"] {
+    font: inherit;
+    font-size: 0.88rem;
+    padding: 0.3rem 0.5rem;
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    flex: 1;
+    min-width: 10rem;
+  }
+
+  :focus-visible { outline: 2px solid var(--go); outline-offset: 2px; }
+
+  .note { color: var(--muted); font-size: 0.85rem; }
+
+  .flash {
+    background: #FBEAE7;
+    border-left: 4px solid var(--overdue);
+    padding: 0.6rem 0.9rem;
+    margin-top: 1rem;
+  }
+
+  @media (max-width: 560px) {
+    .phone { font-size: 1.9rem; }
+    .line .desc { min-width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="who">
+    <a class="phone" href="tel:{{ customer.phone }}">{{ customer.phone }}</a>
+    <span class="name">{{ customer.name }}</span>
+    <span class="cid">Customer {{ customer.customer_no }}</span>
+    <span class="spacer"></span>
+    <a class="nextlink" href="/contact">Next customer</a>
+  </header>
+
+  {% if error %}
+    <p class="flash">{{ error }}</p>
+  {% endif %}
+
+  {% for ro in ros %}
+  <section class="ro">
+    <h2>
+      <span class="ronum">RO {{ ro.ro_number }}</span>
+      <span class="fact">{{ ro.ro_date }}</span>
+      <span class="fact">{{ ro.year }} {{ ro.make }} {{ ro.model }}</span>
+      <span class="fact">{{ "{:,}".format(ro.odometer) }} km</span>
+      <span class="fact">{{ ro.advisor }}</span>
+    </h2>
+
+    {% for line in ro.lines %}
+      {% if not line.actions %}
+        {% set tone = "closed" %}
+      {% elif line.state == "awaiting_appointment" %}
+        {% set tone = "booked" %}
+      {% elif line.next_due and line.next_due <= today %}
+        {% set tone = "due" %}
+      {% else %}
+        {% set tone = "pending" %}
+      {% endif %}
+
+      <div class="line {{ tone }}">
+        <div class="top">
+          <span class="num">{{ line.line_id }}</span>
+          <span class="op">{{ line.opcode }}</span>
+          <span class="desc">{{ line.description }}</span>
+          <span class="when">
+            {{ line.state.replace("_", " ") }}{% if line.next_due %} · {{ line.next_due }}{% endif %}
+          </span>
+        </div>
+
+        {% if line.actions %}
+        <form method="post" action="/contact/{{ customer.customer_no }}/line/{{ line.id }}">
+          {% for a in line.actions %}
+            <button name="action" value="{{ a }}"
+                    {% if a in date_actions %}class="needs-date"{% endif %}>
+              {{ a.replace("_", " ") }}
+            </button>
+          {% endfor %}
+
+          {% if line.actions | select("in", date_actions) | list %}
+            <input type="date" name="explicit_date" aria-label="Date for dashed actions">
+          {% endif %}
+
+          <input type="text" name="note" placeholder="Note (optional)">
+        </form>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </section>
+  {% else %}
+    <p class="note">This customer has no repair orders on file.</p>
+  {% endfor %}
+
+  <p class="note">Dashed buttons need a date. Everything else schedules itself.</p>
+
+</div>
+</body>
+</html>
