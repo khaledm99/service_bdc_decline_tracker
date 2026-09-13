@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Find a customer</title>
+<style>
+  :root {
+    --ground:   #F4F6F5;
+    --surface:  #FFFFFF;
+    --ink:      #1B2422;
+    --muted:    #6C7A76;
+    --rule:     #DCE2E0;
+    --go:       #14584A;
+    --overdue:  #A8372B;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 0 1rem 4rem;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.45;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .wrap { max-width: 640px; margin: 0 auto; }
+
+  a { color: var(--go); }
+
+  .topbar {
+    padding: 1.2rem 0;
+    font-size: 0.9rem;
+    display: flex;
+    gap: 1.2rem;
+  }
+  .topbar a { color: var(--muted); text-decoration: none; }
+  .topbar a:hover { color: var(--go); }
+
+  form { display: flex; gap: 0.5rem; }
+
+  input[type="text"] {
+    font: inherit;
+    font-size: 1.3rem;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    background: var(--surface);
+    color: var(--ink);
+    flex: 1;
+    min-width: 0;
+  }
+  input[type="text"]::placeholder { color: var(--muted); font-size: 1rem; }
+  input:invalid:not(:placeholder-shown) { border-color: var(--overdue); }
+
+  button {
+    font: inherit;
+    font-size: 0.95rem;
+    padding: 0.5rem 1.2rem;
+    background: var(--go);
+    color: #fff;
+    border: 1px solid var(--go);
+    border-radius: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  button:hover { background: #0F4539; }
+
+  :focus-visible { outline: 2px solid var(--go); outline-offset: 2px; }
+
+  .hint { color: var(--muted); font-size: 0.88rem; margin: 0.6rem 0 0; }
+
+  .empty {
+    margin-top: 2rem;
+    padding: 1rem 1.2rem;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 4px solid var(--overdue);
+  }
+  .empty p { margin: 0; }
+  .empty p + p { margin-top: 0.5rem; color: var(--muted); font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <nav class="topbar">
+    <a href="/contact">Contact queue</a>
+    <a href="/enrich">Lookups</a>
+    <a href="/import">Import</a>
+  </nav>
+
+  <form method="get" action="/find">
+    <input type="text" name="customer_no" value="{{ query or '' }}"
+           inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
+           placeholder="Customer number"
+           autofocus autocomplete="off">
+    <button type="submit">Find</button>
+  </form>
+  <p class="hint">Six-digit customer number, as it appears in the CRM.</p>
+
+  {% if not_found %}
+  <div class="empty">
+    <p>No customer on file with number <strong>{{ query }}</strong>.</p>
+    <p>Customers only appear here once one of their repair orders has been looked up.
+       If this one is still waiting, it'll be in the <a href="/enrich">lookup queue</a>.</p>
+  </div>
+  {% endif %}
+
+</div>
+</body>
+</html>

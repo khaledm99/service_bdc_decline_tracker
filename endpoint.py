@@ -76,6 +76,16 @@ def contact_next(request: Request):
             l["actions"] = core.get_legal_actions(l["state"])
     return templates.TemplateResponse(request, "contact.html", {"customer" : customer, "ros": ros, "today": today})
 
+@app.get("/find")
+def find(request: Request, customer_no: str = ""):
+    con = get_connection()
+    if not customer_no:
+        return templates.TemplateResponse(request, "find.html", {})
+    res = core.get_customer(con, customer_no.strip())
+    if not res:
+        return templates.TemplateResponse(request, "find.html", {"query": customer_no, "not_found": True})
+    return RedirectResponse(f"/contact/{customer_no.strip()}", status_code=303)
+
 @app.get("/contact/{customer_no}")
 def contact_one(request: Request, customer_no: str):
     con = get_connection()
