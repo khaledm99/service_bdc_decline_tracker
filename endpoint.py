@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, Form
+from fastapi import FastAPI, Request, Form, UploadFile, File
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 import core
@@ -7,10 +7,36 @@ from datetime import date
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
+
 def get_connection():
     con = sqlite3.connect("test.db")
     con.row_factory = sqlite3.Row
     return con
+
+@app.post("/import")
+def import_csv(request: Request, file: UploadFile = File(...)):
+    con = get_connection()
+    try:
+        rows = core.read_rows_from_bytes(file.file.read(), file.filename)
+        ros = core.group_ros(rows)
+        core.assign_seq_numbers(ros)
+        core.init_db(con)
+        inserted, skipped = core.import_to_database(con, ros)
+    except ValueError as e:
+        return templates.TemplateResponse(
+                request, "import.html", {"error": str(e)}, status_code=400)
+    return templates.TemplateResponse(
+            request, "import.html",
+            {"result": {"inserted": inserted, "skipped": skipped,
+                        "ros": len(ros), "filename": file.filename}},
+            )
+
+@app.get("/import")
+def import_form(request: Request):
+    con = get_connection()
+    return templates.TemplateResponse(request, "import.html",{
+        "imports": [],
+    })
 
 @app.get("/contact")
 def contact_next(request: Request):

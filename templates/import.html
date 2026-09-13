@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Import declines</title>
+<style>
+  :root {
+    --ground:   #F4F6F5;
+    --surface:  #FFFFFF;
+    --ink:      #1B2422;
+    --muted:    #6C7A76;
+    --rule:     #DCE2E0;
+    --go:       #14584A;
+    --overdue:  #A8372B;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 0 1rem 4rem;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.45;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .wrap { max-width: 640px; margin: 0 auto; }
+
+  a { color: var(--go); }
+
+  h1 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin: 2rem 0 0.3rem;
+  }
+
+  .lede { color: var(--muted); margin: 0 0 1.5rem; }
+
+  /* ---- drop target ------------------------------------------- */
+
+  .pick {
+    background: var(--surface);
+    border: 2px dashed var(--rule);
+    padding: 2rem 1.5rem;
+    text-align: center;
+  }
+
+  .pick input[type="file"] {
+    font: inherit;
+    font-size: 0.92rem;
+    width: 100%;
+    max-width: 24rem;
+    margin: 0 auto 1rem;
+    display: block;
+  }
+
+  button {
+    font: inherit;
+    font-size: 0.95rem;
+    padding: 0.5rem 1.2rem;
+    background: var(--go);
+    color: #fff;
+    border: 1px solid var(--go);
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  button:hover { background: #0F4539; }
+
+  :focus-visible { outline: 2px solid var(--go); outline-offset: 2px; }
+
+  /* ---- result ------------------------------------------------- */
+
+  .result {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 4px solid var(--go);
+    padding: 1rem 1.2rem;
+    margin-bottom: 1.5rem;
+  }
+  .result h2 { font-size: 1rem; font-weight: 600; margin: 0 0 0.6rem; }
+  .result dl { display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 1rem; margin: 0; }
+  .result dt { color: var(--muted); }
+  .result dd { margin: 0; font-weight: 600; }
+  .result .onward { margin: 0.9rem 0 0; }
+
+  .error {
+    background: #FBEAE7;
+    border-left: 4px solid var(--overdue);
+    padding: 0.8rem 1.2rem;
+    margin-bottom: 1.5rem;
+  }
+  .error h2 { font-size: 1rem; font-weight: 600; margin: 0 0 0.3rem; }
+  .error p { margin: 0; }
+
+  /* ---- history ------------------------------------------------ */
+
+  .history { margin-top: 2.5rem; }
+  .history h2 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0 0 0.6rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--rule);
+  }
+  .history table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+  .history td { padding: 0.35rem 0; border-bottom: 1px solid var(--rule); }
+  .history td.when  { color: var(--muted); white-space: nowrap; }
+  .history td.count { text-align: right; color: var(--muted); white-space: nowrap; }
+  .history .none { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Import declines</h1>
+  <p class="lede">Upload this week's declined service export. Re-importing a file you've already
+     loaded changes nothing.</p>
+
+  {% if error %}
+  <div class="error">
+    <h2>Couldn't read that file</h2>
+    <p>{{ error }}</p>
+  </div>
+  {% endif %}
+
+  {% if result %}
+  <div class="result">
+    <h2>Imported {{ result.filename }}</h2>
+    <dl>
+      <dt>Repair orders</dt><dd>{{ result.ros }}</dd>
+      <dt>Decline lines added</dt><dd>{{ result.inserted }}</dd>
+      <dt>Already on file</dt><dd>{{ result.skipped }}</dd>
+    </dl>
+    {% if pending_lookup %}
+      <p class="onward"><a href="/enrich">Look up {{ pending_lookup }} repair orders</a></p>
+    {% else %}
+      <p class="onward">Nothing waiting for lookup. <a href="/contact">Open the contact queue</a></p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <form method="post" action="/import" enctype="multipart/form-data" class="pick">
+    <input type="file" name="file" accept=".csv,text/csv" required>
+    <button type="submit">Import file</button>
+  </form>
+
+  <div class="history">
+    <h2>Recent imports</h2>
+    {% if imports %}
+    <table>
+      {% for i in imports %}
+      <tr>
+        <td class="when">{{ i.imported_at }}</td>
+        <td>{{ i.filename }}</td>
+        <td class="count">{{ i.ro_count }} ROs / {{ i.line_count }} lines</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <p class="none">No files imported yet.</p>
+    {% endif %}
+  </div>
+
+</div>
+</body>
+</html>

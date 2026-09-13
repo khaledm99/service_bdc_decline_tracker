@@ -15,6 +15,7 @@
 # read rows into dicts using DictReader
 
 import os
+import io
 import csv
 import sqlite3
 import argparse
@@ -40,56 +41,64 @@ COLUMN_ALIASES = {
 def clear_terminal():
     os.system('cls' if os.name == 'nt' else 'clear')
 
+def read_rows_from_file(f):
+    reader = csv.DictReader(f)
+
+    # map imported raw header names to standard names for internal use
+    mapping = {}
+
+    REQUIRED = {
+        "ro_number",
+        "ro_closed_date",
+        "advisor",
+        "customer_name",
+        "year",
+        "make",
+        "model",
+        "odometer",
+        "opcode",
+        "desc",
+        "status"
+    }
+
+
+    for raw in reader.fieldnames:
+        #normalize header to lowercase and remove leading/trailing whitespace
+        nraw = " ".join(raw.lower().split())
+
+        #check header aliases and build mapping from 
+        #normalized raw headers to standard internal header names
+        internal = COLUMN_ALIASES.get(nraw)
+        if internal:
+            mapping[raw] = internal
+
+        
+    # make sure required columns are present
+    # if any are missing, output which ones to inspect crm output
+    MISSING = REQUIRED - set(mapping.values())
+    if MISSING:
+        raise ValueError(f"Missing required columns: {sorted(MISSING)}")
+
+    rows = []
+    for row in reader:
+        line = {}
+        for h in mapping:
+            line[mapping[h]] = row[h]
+        rows.append(line)
+
+    # return a row in the form:
+    # {"ro_number": "123456", "ro_closed_date": "datetime"...}
+    return rows
+
 def read_rows(path):
     with open(path, newline="", encoding="utf-8-sig") as f:
-        reader = csv.DictReader(f)
+        return read_rows_from_file(f)
 
-        # map imported raw header names to standard names for internal use
-        mapping = {}
-
-        REQUIRED = {
-            "ro_number",
-            "ro_closed_date",
-            "advisor",
-            "customer_name",
-            "year",
-            "make",
-            "model",
-            "odometer",
-            "opcode",
-            "desc",
-            "status"
-        }
-
-
-        for raw in reader.fieldnames:
-            #normalize header to lowercase and remove leading/trailing whitespace
-            nraw = " ".join(raw.lower().split())
-
-            #check header aliases and build mapping from 
-            #normalized raw headers to standard internal header names
-            internal = COLUMN_ALIASES.get(nraw)
-            if internal:
-                mapping[raw] = internal
-
-            
-        # make sure required columns are present
-        # if any are missing, output which ones to inspect crm output
-        MISSING = REQUIRED - set(mapping.values())
-        if MISSING:
-            raise ValueError(f"Missing required columns: {sorted(MISSING)}")
-
-        rows = []
-        for row in reader:
-            line = {}
-            for h in mapping:
-                line[mapping[h]] = row[h]
-            rows.append(line)
-
-        # return a row in the form:
-        # {"ro_number": "123456", "ro_closed_date": "datetime"...}
-        return rows
-
+# Needed for file upload on web frontend
+def read_rows_from_bytes(data, filename=""):
+    text = io.TextIOWrapper(io.BytesIO(data), newline="", encoding="utf-8-sig")
+    return read_rows_from_file(text)
+       
 def group_ros(rows):
     # group rows by repair order
     ros = {}
