@@ -207,16 +207,24 @@ def import_to_database(con, ros):
 # We'll serve up unenriched RO's in one queue, and as the user inputs the 
 # customer information (requires manual CRM lookup), they'll be shifted to
 # the actual decline contact queue
-def next_unenriched(con):
+def next_unenriched(con, skip):
     sql = """
         SELECT *
         FROM repair_order 
         WHERE customer_no IS NULL
-        ORDER BY ro_date, ro_number
-        LIMIT 1
         """
-    cur = con.execute(sql)
+    params = []
+    if skip:
+        sql += f" AND ro_number NOT IN ({','.join('?' * len(skip))})"
+        params = list(skip)
+    sql += "ORDER BY ro_date, ro_number LIMIT 1"
+    cur = con.execute(sql, params)
     return cur.fetchone()
+
+def count_unenriched(con):
+    sql = "SELECT COUNT(*) FROM repair_order WHERE customer_no IS NULL"
+    res = con.execute(sql)
+    return res.fetchone()[0]
 
 # Take sqlite3 row object
 def display_ro(ro, lines):
@@ -246,29 +254,32 @@ def display_line(l):
     print("Line",str(l["line_seq"])+":", l["opcode"],"---",l["description"],"Due:",l["next_due"],l["state"])
 
 # Add customer info to Customer table and add customer id and phone to RO
-def enrich_ro(con, ro, cid, phone):
+def enrich_ro(con, ro_number, cid, phone):
+    res = con.execute("SELECT customer_name, ro_date FROM repair_order WHERE ro_number = ? LIMIT 1", (ro_number,)).fetchone()
+    print(res["customer_name"], res["ro_date"])
     with con:
         con.execute("""
         INSERT INTO customer (id, name, phone) VALUES (?, ?, ?) ON CONFLICT DO NOTHING""", 
-        (cid, ro["customer_name"], phone))
+        (cid, res["customer_name"], phone))
 
         con.execute("""
         UPDATE repair_order
         SET customer_no = (?), customer_phone = (?)
         WHERE ro_number = (?)
-        """, (cid, phone, ro["ro_number"]))
+        """, (cid, phone, ro_number))
         
-        next_due = (date.fromisoformat(ro["ro_date"]) + timedelta(days=14)).isoformat()
+        next_due = (date.fromisoformat(res["ro_date"]) + timedelta(days=14)).isoformat()
         con.execute("""
         UPDATE decline_line
         SET next_due = (?), state = "awaiting_contact"
         WHERE ro_number = (?)
-        """, (next_due, ro["ro_number"]))
+        """, (next_due, ro_number))
 
+SKIPPED: set[str] = set()
 # Serve unenriched RO's one-by-one, take user input to add customer ID and phone number
 def serve_unenriched_ros(con):
     while True:
-        ro = next_unenriched(con)
+        ro = next_unenriched(con, SKIPPED)
 
         if ro is None:
             clear_terminal()
@@ -286,7 +297,7 @@ def serve_unenriched_ros(con):
         while not phone.isdigit() or len(phone) != 10:
             phone = input("Invalid phone number. Enter phone number: ")
 
-        enrich_ro(con, ro, cid, phone)
+        enrich_ro(con, ro["ro_number"], cid, phone)
 
         
     

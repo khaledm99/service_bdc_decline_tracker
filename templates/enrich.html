@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Look up RO {{ ro.ro_number }}</title>
+<style>
+  :root {
+    --ground:   #F4F6F5;
+    --surface:  #FFFFFF;
+    --ink:      #1B2422;
+    --muted:    #6C7A76;
+    --rule:     #DCE2E0;
+    --go:       #14584A;
+    --overdue:  #A8372B;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 0 1rem 4rem;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.45;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .wrap { max-width: 720px; margin: 0 auto; }
+
+  a { color: var(--go); }
+
+  .progress {
+    padding: 1.2rem 0 0.8rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+  }
+
+  /* ---- the number you type into the CRM ---------------------- */
+
+  .target {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    padding: 1.4rem 1.5rem;
+  }
+
+  .ronum {
+    font-size: 2.6rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    margin: 0;
+    user-select: all;
+  }
+
+  .facts {
+    margin: 0.7rem 0 0;
+    color: var(--muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 1.2rem;
+  }
+  .facts .who { color: var(--ink); font-weight: 600; }
+
+  /* ---- context: what they declined --------------------------- */
+
+  .declines { margin: 1.5rem 0 0; }
+  .declines h2 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--muted);
+    margin: 0 0 0.5rem;
+  }
+  .declines table { width: 100%; border-collapse: collapse; font-size: 0.93rem; }
+  .declines td { padding: 0.35rem 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  .declines td.seq { width: 1.8rem; color: var(--muted); }
+  .declines td.op  { width: 6rem; font-weight: 600; }
+
+  /* ---- entry -------------------------------------------------- */
+
+  .entry {
+    margin-top: 1.8rem;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 4px solid var(--go);
+    padding: 1.2rem 1.5rem;
+  }
+
+  .fields { display: flex; flex-wrap: wrap; gap: 1.2rem; align-items: flex-end; }
+
+  label { display: block; }
+  label span {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 0.25rem;
+  }
+
+  input[type="text"] {
+    font: inherit;
+    font-size: 1.15rem;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    background: var(--ground);
+    color: var(--ink);
+    width: 10rem;
+  }
+  input:invalid:not(:placeholder-shown) { border-color: var(--overdue); }
+
+  button {
+    font: inherit;
+    font-size: 0.95rem;
+    padding: 0.5rem 1.2rem;
+    background: var(--go);
+    color: #fff;
+    border: 1px solid var(--go);
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  button:hover { background: #0F4539; }
+
+  .secondary {
+    margin-top: 1rem;
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+  }
+  .secondary button {
+    background: transparent;
+    color: var(--muted);
+    border-color: var(--rule);
+  }
+  .secondary button:hover { color: var(--ink); border-color: var(--muted); }
+
+  :focus-visible { outline: 2px solid var(--go); outline-offset: 2px; }
+
+  .error {
+    background: #FBEAE7;
+    border-left: 4px solid var(--overdue);
+    padding: 0.7rem 1.2rem;
+    margin: 1rem 0 0;
+  }
+  .error p { margin: 0; }
+
+  .known {
+    margin: 0.9rem 0 0;
+    padding: 0.6rem 0.9rem;
+    background: var(--ground);
+    border: 1px solid var(--rule);
+    font-size: 0.9rem;
+  }
+
+  @media (max-width: 520px) {
+    .ronum { font-size: 2rem; }
+    input[type="text"] { width: 100%; }
+    .fields { display: block; }
+    .fields label { margin-bottom: 1rem; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="progress">
+    <span>{{ remaining }} repair orders left to look up</span>
+    <a href="/contact">Contact queue</a>
+  </p>
+
+  <div class="target">
+    <p class="ronum">{{ ro.ro_number }}</p>
+    <p class="facts">
+      <span class="who">{{ ro.customer_name }}</span>
+      <span>{{ ro.ro_date }}</span>
+      <span>{{ ro.year }} {{ ro.make }} {{ ro.model }}</span>
+      <span>{{ ro.odometer }} km</span>
+      <span>{{ ro.advisor }}</span>
+    </p>
+  </div>
+
+  <div class="declines">
+    <h2>Declined on this visit</h2>
+    <table>
+      {% for line in lines %}
+      <tr>
+        <td class="seq">{{ line.line_seq }}</td>
+        <td class="op">{{ line.opcode }}</td>
+        <td>{{ line.description }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <div class="entry">
+    <form method="post" action="/enrich/{{ ro.ro_number }}">
+      <div class="fields">
+        <label>
+          <span>Customer number</span>
+          <input type="text" name="customer_no" inputmode="numeric"
+                 pattern="[0-9]{6}" maxlength="6" placeholder="000000"
+                 required autofocus autocomplete="off">
+        </label>
+        <label>
+          <span>Phone</span>
+          <input type="text" name="phone" inputmode="numeric"
+                 pattern="[0-9]{10}" maxlength="10" placeholder="4035550142"
+                 required autocomplete="off">
+        </label>
+        <button type="submit">Save and continue</button>
+      </div>
+    </form>
+
+    {% if error %}
+    <div class="error"><p>{{ error }}</p></div>
+    {% endif %}
+
+    {% if known_customer %}
+    <p class="known">
+      That customer number is already on file as <strong>{{ known_customer.name }}</strong>
+      — this repair order says {{ ro.customer_name }}. Save again to link them anyway.
+    </p>
+    {% endif %}
+  </div>
+
+  <div class="secondary">
+    <form method="post" action="/enrich/{{ ro.ro_number }}/skip">
+      <button type="submit">Skip for now</button>
+    </form>
+    <span class="progress">Skipped repair orders come back next session.</span>
+  </div>
+
+</div>
+</body>
+</html>

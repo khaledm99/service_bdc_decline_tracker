@@ -38,6 +38,30 @@ def import_form(request: Request):
         "imports": [],
     })
 
+SKIPPED: set[str] = set()  
+@app.get("/enrich")
+def enrich_next(request: Request):
+    con = get_connection()
+    res = core.next_unenriched(con, skip=SKIPPED)
+    if res is None:
+        return templates.TemplateResponse(request, "enrich_done.html", {})
+    return templates.TemplateResponse(request, "enrich.html", {
+        "ro": res,
+        "lines": core.fetch_lines(con, res),
+        "remaining": core.count_unenriched(con),
+    })
+
+@app.post("/enrich/{ro_number}")
+def apply_enrich(request: Request, ro_number: str, customer_no: str = Form(...), phone: str = Form(...)):
+    con = get_connection()
+    core.enrich_ro(con, ro_number, customer_no, phone)
+    return RedirectResponse("/enrich", status_code=303)
+
+@app.post("/enrich/{ro_number}/skip")
+def enrich_skip(ro_number: str):
+    SKIPPED.add(ro_number)
+    return RedirectResponse("/enrich", status_code=303)
+    
 @app.get("/contact")
 def contact_next(request: Request):
     con = get_connection()
