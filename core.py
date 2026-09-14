@@ -217,7 +217,7 @@ def next_unenriched(con, skip):
     if skip:
         sql += f" AND ro_number NOT IN ({','.join('?' * len(skip))})"
         params = list(skip)
-    sql += "ORDER BY ro_date, ro_number LIMIT 1"
+    sql += " ORDER BY ro_date, ro_number LIMIT 1"
     cur = con.execute(sql, params)
     return cur.fetchone()
 

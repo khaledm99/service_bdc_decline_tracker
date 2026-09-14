@@ -92,10 +92,10 @@ class RepairOrder:
     advisor: str
     tech: str
     customer: Customer
-    declines: List[DeclineLine]
+    declines: list[DeclineLine]
 
 def _gen_declines(
-) -> List[DeclineLine]:
+) -> list[DeclineLine]:
     n = random.randrange(1,5)
     declines = []
     codes = random.sample(list(OPCODES.keys()), n)
@@ -110,7 +110,7 @@ def _gen_declines(
 
 def _gen_customers(
     n: int
-) -> List[Customer]:
+) -> list[Customer]:
     customers = []
     used_ids = []
     for c in range(n):
@@ -132,7 +132,7 @@ def _gen_visits(
     n: int,
     start: date,
     end: date
-) -> List[List[datetime]]:
+) -> list[list[datetime]]:
     visits = []
     for i in range(n):
         # each customer will visit 1-4 times per year, with 1 visit being the most common
@@ -164,7 +164,7 @@ def _gen_visits(
             datetimes.append(open_dt + timedelta(minutes = random.randrange(span)))
         visits.append(datetimes)
     return visits
-def _make_ro_rows(ro: RepairOrder) -> List[List[str]]:
+def _make_ro_rows(ro: RepairOrder) -> list[list[str]]:
     # Each element is prepended with a space to mimic the real output
     # of the crm
     rows = []
